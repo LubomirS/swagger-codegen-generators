@@ -16,6 +16,7 @@ import io.swagger.v3.oas.models.Operation;
 import io.swagger.v3.oas.models.PathItem;
 import io.swagger.v3.oas.models.Paths;
 import io.swagger.v3.oas.models.media.ArraySchema;
+import io.swagger.v3.oas.models.media.ComposedSchema;
 import io.swagger.v3.oas.models.media.IntegerSchema;
 import io.swagger.v3.oas.models.media.MapSchema;
 import io.swagger.v3.oas.models.media.MediaType;
@@ -703,6 +704,12 @@ public abstract class AbstractJavaCodegen extends DefaultCodegenConfig {
         } else if (propertySchema instanceof MapSchema && hasTrueAdditionalProperties(propertySchema)) {
             Schema inner = new ObjectSchema();
             return getSchemaType(propertySchema) + "<String, " + getTypeDeclaration(inner) + ">";
+        } else if (propertySchema instanceof ComposedSchema && ((ComposedSchema) propertySchema).getAllOf() != null) {
+            String typeDeclaration = super.getTypeDeclaration(propertySchema);
+            if (typeDeclaration.equalsIgnoreCase("Object")) {
+                return ((ComposedSchema) propertySchema).getAllOf().stream().map(this::getTypeDeclaration).filter(s -> !s.equalsIgnoreCase("Object")).findFirst().orElse("Object");
+            }
+            return typeDeclaration;
         }
         return super.getTypeDeclaration(propertySchema);
     }
@@ -980,6 +987,20 @@ public abstract class AbstractJavaCodegen extends DefaultCodegenConfig {
                 model.imports.add("ToStringSerializer");
                 model.imports.add("JsonSerialize");
             }
+        }
+
+        if (property.baseType.equals("BigDecimal") && property.getDataFormat() != null) {
+            switch (property.getDataFormat()) {
+                case "currency":
+                    property.vendorExtensions.put("x-decimal-format", "Currency");
+                    return;
+                case "percentage":
+                    property.vendorExtensions.put("x-decimal-format", "Percentage");
+            }
+        }
+
+        if (StringUtils.equalsIgnoreCase(property.getBaseName(), "_expands")) {
+            property.getVendorExtensions().put("x-expands-list", true);
         }
 
         if (!fullJavaUtil) {
@@ -1601,7 +1622,7 @@ public abstract class AbstractJavaCodegen extends DefaultCodegenConfig {
      * @return getter name based on naming convention
      */
     public String toBooleanGetter(String name) {
-        return "is" + getterAndSetterCapitalize(name);
+        return "get" + getterAndSetterCapitalize(name);
     }
 
     @Override

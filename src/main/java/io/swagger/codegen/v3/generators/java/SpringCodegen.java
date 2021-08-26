@@ -289,10 +289,6 @@ public class SpringCodegen extends AbstractJavaCodegen implements BeanValidation
             this.setSwaggerDocketConfig(Boolean.valueOf(additionalProperties.get(SWAGGER_DOCKET_CONFIG).toString()));
         }
 
-        typeMapping.put("file", "Resource");
-        typeMapping.put("binary", "Resource");
-        importMapping.put("Resource", "org.springframework.core.io.Resource");
-
         if (useOptional) {
             writePropertyBack(USE_OPTIONAL, useOptional);
         }
@@ -850,6 +846,9 @@ public class SpringCodegen extends AbstractJavaCodegen implements BeanValidation
                 model.imports.add("JsonCreator");
             }
         }
+        if (model.getName().equalsIgnoreCase("Entity")) {
+            model.getVendorExtensions().put("x-entity-filter", true);
+        }
     }
 
     @Override
@@ -872,21 +871,21 @@ public class SpringCodegen extends AbstractJavaCodegen implements BeanValidation
     }
 
     protected List<Map<String, Object>> modelInheritanceSupport(List<?> allModels) {
-        Map<CodegenModel, List<CodegenModel>> byParent = new LinkedHashMap<>();
+        Map<String, List<CodegenModel>> byParent = new LinkedHashMap<>();
         for (Object model : allModels) {
             Map entry = (Map) model;
-            CodegenModel parent = ((CodegenModel)entry.get("model")).parentModel;
-            if(null!= parent) {
-                byParent.computeIfAbsent(parent, k -> new LinkedList<>()).add((CodegenModel)entry.get("model"));
+            CodegenModel codegenModel = ((CodegenModel)entry.get("model"));
+            if(null!= codegenModel) {
+                byParent.computeIfAbsent(codegenModel.getName(), k -> new LinkedList<>()).add((CodegenModel)entry.get("model"));
             }
         }
 
         List<Map<String, Object>> parentsList = new ArrayList<>();
-        for (Map.Entry<CodegenModel, List<CodegenModel>> parentModelEntry : byParent.entrySet()) {
-            CodegenModel parentModel = parentModelEntry.getKey();
+        for (Map.Entry<String, List<CodegenModel>> parentModelEntry : byParent.entrySet()) {
+            String parentModel = parentModelEntry.getKey();
             List<Map<String, Object>> childrenList = new ArrayList<>();
             Map<String, Object> parent = new HashMap<>();
-            parent.put("classname", parentModel.classname);
+            parent.put("classname", parentModel);
             List<CodegenModel> childrenModels = byParent.get(parentModel);
 
             if (childrenModels == null || childrenModels.isEmpty()) {
@@ -900,10 +899,10 @@ public class SpringCodegen extends AbstractJavaCodegen implements BeanValidation
                 childrenList.add(child);
             }
             parent.put("children", childrenList);
-            parent.put("discriminator", parentModel.discriminator);
-            if(parentModel.discriminator != null && parentModel.discriminator.getMapping() != null)
+            parent.put("discriminator", childrenModels.get(0).discriminator);
+            if(childrenModels.get(0).discriminator != null && childrenModels.get(0).discriminator.getMapping() != null)
             {
-                parentModel.discriminator.getMapping().replaceAll((key, value) -> OpenAPIUtil.getSimpleRef(value));
+                childrenModels.get(0).discriminator.getMapping().replaceAll((key, value) -> OpenAPIUtil.getSimpleRef(value));
             }
             parentsList.add(parent);
         }
